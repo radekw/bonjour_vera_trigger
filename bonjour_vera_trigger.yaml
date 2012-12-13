@@ -1,0 +1,20 @@
+---
+bonjour_type: _apple-mobdev._tcp.
+devices_names:
+- d8:d1:cb:9f:7b:c5
+- d8:d1:cb:9d:c4:91
+vera_url: http://192.168.10.2:3480
+vera_triggers:
+  available:
+    - id: lu_action
+      DeviceNum: 28
+      serviceId: urn:upnp-org:serviceId:VSwitch1
+      action: SetTarget
+      newTargetValue: 0
+  not_available:
+    - id: lu_action
+      DeviceNum: 28
+      serviceId: urn:upnp-org:serviceId:VSwitch1
+      action: SetTarget
+      newTargetValue: 1
+

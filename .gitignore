@@ -1,0 +1,9 @@
+.project
+.pydevproject
+.settings
+build/
+dist/
+.DS_Store
+*.pyc
+*.egg-info
+*.pid
