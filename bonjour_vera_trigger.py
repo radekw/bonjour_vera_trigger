@@ -15,6 +15,8 @@ except ImportError:
 options = None
 config = {}
 
+bj_devices = {}
+
 ##############################################################################
 def run_wait(cmd):
     logging.debug('executing: %s' % cmd)
@@ -54,16 +56,50 @@ def get_device_status_from_json(json_string):
     return status
 
 ##############################################################################
+def trigger(available):
+    if available:
+        logging.info('triggering vera_triggers -> available')
+        devices = config['vera_triggers']['available']
+    else:
+        logging.info('triggering vera_triggers -> not_available')
+        devices = config['vera_triggers']['not_available']
+    
+    for dev in devices:
+        if dev['id'] == 'lu_action' and dev['action'] == 'SetTarget':
+            url = '%s/data_request?output_format=json' % config['vera_url']
+            status_url = '%s&id=status&DeviceNum=%s' % (url, dev['DeviceNum'])
+            action_url = url
+            for k, v in dev.items():
+                action_url += '&%s=%s' % (k, v)
+            logging.debug('accessing status_url: %s' % status_url)
+            status_json = open_url(status_url)
+            if status_json is None:
+                break
+            status = get_device_status_from_json(status_json)
+            logging.debug('status: current: %s; requested: %s' % \
+                          (status, dev['newTargetValue']))
+            if str(status) == str(dev['newTargetValue']):
+                logging.info('no action on DeviceNum %s' % dev['DeviceNum'])
+                break
+            logging.info('triggering DeviceNum %s' % dev['DeviceNum'])
+            logging.debug('accessing action_url: %s' % action_url)
+            open_url(action_url)
+
+##############################################################################
 def check_devices():
+    global bj_devices
     all_available = False
     
     def browse_callback(sdRef, flags, interfaceIndex, errorCode,
                         serviceName, regtype, replyDomain):
+        global bj_devices
         if errorCode != pybonjour.kDNSServiceErr_NoError:
             return
         if not (flags & pybonjour.kDNSServiceFlagsAdd):
+            bj_devices[serviceName] = {'available': False, 'time': time.time()}
             print 'rmv: %s' % (serviceName)
         else:
+            bj_devices[serviceName] = {'available': True, 'time': time.time()}
             print 'add: %s' % (serviceName)
     
     browse_sdRef = pybonjour.DNSServiceBrowse(regtype = config['bonjour_type'],
@@ -74,6 +110,8 @@ def check_devices():
             ready = select.select([browse_sdRef], [], [], 15)
             if browse_sdRef in ready[0]:
                 pybonjour.DNSServiceProcessResult(browse_sdRef)
+            for bjd_name, bjd in bj_devices.items():
+                pass
     except KeyboardInterrupt:
         pass
     finally:
