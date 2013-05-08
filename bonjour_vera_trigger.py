@@ -97,9 +97,8 @@ def check_devices():
             return
         serviceNameInfo = serviceName.split('@')
         if serviceNameInfo[0] not in config['devices_names']:
-            return
-        else:
             logging.debug('unknown device: %s' % serviceName)
+            return
         if not (flags & pybonjour.kDNSServiceFlagsAdd):
             bj_devices[serviceName] = {'available': False, 'time': time.time()}
             logging.debug('rmv: %s' % serviceName)
