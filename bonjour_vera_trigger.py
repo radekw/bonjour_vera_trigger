@@ -95,12 +95,17 @@ def check_devices():
         global bj_devices
         if errorCode != pybonjour.kDNSServiceErr_NoError:
             return
+        serviceNameInfo = serviceName.split('@')
+        if serviceNameInfo[0] not in config['devices_names']:
+            return
+        else:
+            logging.debug('unknown device: %s' % serviceName)
         if not (flags & pybonjour.kDNSServiceFlagsAdd):
             bj_devices[serviceName] = {'available': False, 'time': time.time()}
-            print 'rmv: %s' % (serviceName)
+            logging.debug('rmv: %s' % serviceName)
         else:
             bj_devices[serviceName] = {'available': True, 'time': time.time()}
-            print 'add: %s' % (serviceName)
+            logging.debug('add: %s' % serviceName)
     
     browse_sdRef = pybonjour.DNSServiceBrowse(regtype = config['bonjour_type'],
                                               callBack = browse_callback)
@@ -110,18 +115,24 @@ def check_devices():
             ready = select.select([browse_sdRef], [], [], 15)
             if browse_sdRef in ready[0]:
                 pybonjour.DNSServiceProcessResult(browse_sdRef)
+            all_available = False
             for bjd_name, bjd in bj_devices.items():
-                pass
+                if bjd['available']:
+                    all_available = True
+                    break
+                else:
+                    if time.time() - bjd['time'] <= 120:
+                        all_available = True
+                        break
+            logging.debug('all_available: %s' % all_available)
+            if not options.test_only:
+                trigger(all_available)
     except KeyboardInterrupt:
-        pass
+        logging.info('interrupted - exiting')
     finally:
         browse_sdRef.close()
     
     return all_available
-
-##############################################################################
-def check_devices_forver():
-    logging.error('not implemented yet')
 
 ##############################################################################
 def main():
@@ -133,9 +144,9 @@ def main():
     parser.add_option('-c', '--config', default=None,
                       action='store', type='string', dest='config',
                       help='Configuration file')
-    parser.add_option('-d', '--daemon', dest='daemon',
+    parser.add_option('-t', '--test', dest='test_only',
                       action='store_true', default=False,
-                      help='Run as daemon')
+                      help='Test only')
     parser.add_option('-v', '--verbose', dest='verbose',
                       action='store_true', default=False,
                       help='Update its own record')
@@ -154,7 +165,7 @@ def main():
         if os.path.exists(options.config):
             config = load(file(options.config, 'r'), Loader=Loader)
         else:
-            print('ERROR: configuration file %s does not exist' %
+            logging.error('ERROR: configuration file %s does not exist' %
                   options.config)
             sys.exit(1)
     else:
@@ -166,11 +177,7 @@ def main():
                 config = load(file(config_file, 'r'), Loader=Loader)
                 break
     
-    if options.daemon:
-        while True:
-            check_devices_forver()
-    else:
-        check_devices()
+    check_devices()
 
 ##############################################################################
 if __name__ == "__main__":
