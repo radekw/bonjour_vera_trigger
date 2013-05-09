@@ -90,21 +90,20 @@ def check_devices():
     global bj_devices
     all_available = False
     
+    for d in config['devices_names']:
+        bj_devices[d] = time.time()
+    
     def browse_callback(sdRef, flags, interfaceIndex, errorCode,
                         serviceName, regtype, replyDomain):
         global bj_devices
         if errorCode != pybonjour.kDNSServiceErr_NoError:
             return
-        serviceNameInfo = serviceName.split('@')
-        if serviceNameInfo[0] not in config['devices_names']:
-            logging.debug('unknown device: %s' % serviceName)
+        device_name = serviceName.split('@')[0]
+        if device_name not in config['devices_names']:
+            logging.debug('unknown device: %s' % device_name)
             return
-        if not (flags & pybonjour.kDNSServiceFlagsAdd):
-            bj_devices[serviceName] = {'available': False, 'time': time.time()}
-            logging.debug('rmv: %s' % serviceName)
-        else:
-            bj_devices[serviceName] = {'available': True, 'time': time.time()}
-            logging.debug('add: %s' % serviceName)
+        logging.info('known device: %s' % device_name)
+        bj_devices[device_name] = time.time()
     
     browse_sdRef = pybonjour.DNSServiceBrowse(regtype = config['bonjour_type'],
                                               callBack = browse_callback)
@@ -115,14 +114,10 @@ def check_devices():
             if browse_sdRef in ready[0]:
                 pybonjour.DNSServiceProcessResult(browse_sdRef)
             all_available = False
-            for bjd_name, bjd in bj_devices.items():
-                if bjd['available']:
+            for bjd_name, bjd_last_seen in bj_devices.items():
+                if time.time() - bjd_last_seen <= 120:
                     all_available = True
                     break
-                else:
-                    if time.time() - bjd['time'] <= 120:
-                        all_available = True
-                        break
             logging.debug('all_available: %s' % all_available)
             if not options.test_only:
                 trigger(all_available)
