@@ -14,8 +14,7 @@ except ImportError:
 ##############################################################################
 options = None
 config = {}
-
-bj_devices = {}
+last_seen = time.time()
 
 ##############################################################################
 def run_wait(cmd):
@@ -52,7 +51,7 @@ def get_device_status_from_json(json_string):
                     if s['variable'] == 'Status':
                         status = s['value']
     except:
-        status = None
+        status = 0
     return status
 
 ##############################################################################
@@ -87,15 +86,12 @@ def trigger(available):
 
 ##############################################################################
 def check_devices():
-    global bj_devices
-    all_available = False
-    
-    for d in config['devices_names']:
-        bj_devices[d] = time.time()
+    global last_seen
+    device_present = False
     
     def browse_callback(sdRef, flags, interfaceIndex, errorCode,
                         serviceName, regtype, replyDomain):
-        global bj_devices
+        global last_seen
         if errorCode != pybonjour.kDNSServiceErr_NoError:
             return
         device_name = serviceName.split('@')[0]
@@ -103,7 +99,7 @@ def check_devices():
             logging.debug('unknown device: %s' % device_name)
             return
         logging.info('known device: %s' % device_name)
-        bj_devices[device_name] = time.time()
+        last_seen = time.time()
     
     browse_sdRef = pybonjour.DNSServiceBrowse(regtype = config['bonjour_type'],
                                               callBack = browse_callback)
@@ -113,20 +109,21 @@ def check_devices():
             ready = select.select([browse_sdRef], [], [], 15)
             if browse_sdRef in ready[0]:
                 pybonjour.DNSServiceProcessResult(browse_sdRef)
-            all_available = False
-            for bjd_name, bjd_last_seen in bj_devices.items():
-                if time.time() - bjd_last_seen <= 120:
-                    all_available = True
-                    break
-            logging.debug('all_available: %s' % all_available)
+            device_present = False
+            last_seen_ago = int(time.time() - last_seen)
+            logging.debug('last seen %s seconds ago' % last_seen_ago)
+            if time.time() - last_seen <= 180:
+                device_present = True
+            logging.debug('device_present: %s' % device_present)
             if not options.test_only:
-                trigger(all_available)
+                trigger(device_present)
+            logging.debug('')
     except KeyboardInterrupt:
         logging.info('interrupted - exiting')
     finally:
         browse_sdRef.close()
     
-    return all_available
+    return device_present
 
 ##############################################################################
 def main():
